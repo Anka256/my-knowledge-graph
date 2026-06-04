@@ -1,0 +1,2346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>My Knowledge Graph</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #1a1a24;
+      --border: rgba(255, 255, 255, 0.07);
+      --accent: #5b8fff;
+      --accent2: #a78bfa;
+      --ok: #34d399;
+      --text: #e8e8f0;
+      --dim: #6b6b80;
+      --panel: 340px;
+    }
+
+    :root.light {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface2: #f1f5f9;
+      --border: rgba(0, 0, 0, 0.1);
+      --accent: #2563eb;
+      --accent2: #7c3aed;
+      --ok: #10b981;
+      --text: #0f172a;
+      --text2: #334155;
+      --dim: #64748b;
+    }
+
+    html,
+    body {
+      height: 100%;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      overflow: hidden
+    }
+
+    /* Header */
+    #hdr {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #hdr h1 {
+      font-size: 15px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent
+    }
+
+    .theme-btn {
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 0px 15px 0px 5px;
+      transition: color 0.15s, transform 0.15s;
+      display: flex;
+      align-items: center;
+    }
+
+    .theme-btn:hover {
+      color: var(--text);
+      transform: scale(1.25);
+    }
+
+    .theme-transition,
+    .theme-transition *,
+    .theme-transition *::before,
+    .theme-transition *::after {
+      transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, fill 0.4s ease, stroke 0.4s ease !important;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 14px
+    }
+
+    .stat {
+      font-size: 12px;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 5px
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%
+    }
+
+    .dot.n {
+      background: var(--accent)
+    }
+
+    .dot.e {
+      background: var(--accent2)
+    }
+
+    /* Canvas */
+    #cy {
+      position: fixed;
+      top: 52px;
+      left: 0;
+      bottom: 0;
+      right: 0;
+      transition: right .35s cubic-bezier(.4, 0, .2, 1)
+    }
+
+    #cy.add-open {
+      right: var(--panel)
+    }
+
+    #cy.detail-open {
+      right: var(--panel)
+    }
+
+    /* Shared panel base */
+    .side-panel {
+      position: fixed;
+      top: 52px;
+      right: 0;
+      bottom: 0;
+      width: var(--panel);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform .35s cubic-bezier(.4, 0, .2, 1);
+      display: flex;
+      flex-direction: column;
+      z-index: 90;
+      overflow: hidden;
+    }
+
+    .side-panel.open {
+      transform: translateX(0)
+    }
+
+    .panel-hdr {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-shrink: 0
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 600;
+      flex: 1
+    }
+
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      transition: .15s;
+      flex-shrink: 0
+    }
+
+    .close-btn:hover {
+      color: var(--text)
+    }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px
+    }
+
+    .panel-body::-webkit-scrollbar {
+      width: 3px
+    }
+
+    .panel-body::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px
+    }
+
+    .sec {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 7px
+    }
+
+    /* Add node panel */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 7px
+    }
+
+    .field label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--dim)
+    }
+
+    .field input,
+    .field textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      outline: none;
+      resize: none;
+      transition: border-color .15s
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      border-color: var(--accent)
+    }
+
+    .field textarea {
+      min-height: 100px
+    }
+
+    #add-status {
+      font-size: 12px;
+      color: var(--accent);
+      min-height: 18px;
+      display: flex;
+      align-items: center;
+      gap: 7px
+    }
+
+    .sp-sm {
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(91, 143, 255, .2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+      display: none
+    }
+
+    #add-status.loading .sp-sm {
+      display: block
+    }
+
+    .btn-save {
+      width: 100%;
+      padding: 11px;
+      background: linear-gradient(135deg, #3b6fd4, var(--accent2));
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s
+    }
+
+    .btn-save:hover {
+      opacity: .85
+    }
+
+    .btn-save:disabled {
+      opacity: .4;
+      cursor: not-allowed
+    }
+
+    /* Detail panel */
+    .content-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text)
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500
+    }
+
+    .badge.ok {
+      background: rgba(52, 211, 153, .1);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, .2)
+    }
+
+    .badge.no {
+      background: rgba(255, 255, 255, .05);
+      color: var(--dim);
+      border: 1px solid var(--border)
+    }
+
+    .edge-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 7px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s
+    }
+
+    .edge-card:hover {
+      border-color: var(--accent);
+      background: rgba(91, 143, 255, 0.05)
+    }
+
+    .ec-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    .ec-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent)
+    }
+
+    .sim-pill {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: rgba(91, 143, 255, .1);
+      color: var(--accent);
+      border: 1px solid rgba(91, 143, 255, .2)
+    }
+
+    .ec-desc {
+      font-size: 12px;
+      color: var(--dim);
+      line-height: 1.5
+    }
+
+    .ec-peer {
+      font-size: 11px;
+      color: var(--dim)
+    }
+
+    .ec-peer span {
+      color: var(--text);
+      font-weight: 500
+    }
+
+    /* Add button */
+    #btn-add {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      background: linear-gradient(135deg, #3b6fd4, var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 28px rgba(91, 143, 255, .4);
+      transition: transform .15s, box-shadow .15s
+    }
+
+    #btn-add:hover {
+      transform: translateX(-50%) translateY(-2px);
+      box-shadow: 0 8px 36px rgba(91, 143, 255, .55)
+    }
+
+    /* Node overlays */
+    #overlays {
+      position: fixed;
+      top: 52px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 60
+    }
+
+    .nover {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    /* Phase 1: Embedding — solid spinning ring */
+    .ph-embed {
+      width: 38px;
+      height: 38px;
+      border: 2.5px solid rgba(91, 143, 255, .15);
+      border-top-color: var(--accent);
+      border-right-color: rgba(91, 143, 255, .5);
+      border-radius: 50%;
+      animation: spin 1s cubic-bezier(.4, 0, .6, 1) infinite;
+    }
+
+    /* Phase 2: LLM — three orbiting dots */
+    .ph-llm {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      animation: spin 2s linear infinite
+    }
+
+    .ph-llm-dot {
+      position: absolute;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent2)
+    }
+
+    .ph-llm-dot:nth-child(1) {
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%)
+    }
+
+    .ph-llm-dot:nth-child(2) {
+      bottom: 4px;
+      left: 4px
+    }
+
+    .ph-llm-dot:nth-child(3) {
+      bottom: 4px;
+      right: 4px
+    }
+
+    /* Inner pulse ring */
+    .ph-llm::after {
+      content: '';
+      position: absolute;
+      inset: 6px;
+      border: 1.5px dashed rgba(167, 139, 250, .35);
+      border-radius: 50%;
+      animation: spin 3s linear infinite reverse
+    }
+
+    /* Phase 3: Checkmark */
+    .ph-check svg {
+      width: 36px;
+      height: 36px;
+      animation: pop .45s cubic-bezier(.34, 1.56, .64, 1) forwards
+    }
+
+    @keyframes pop {
+      0% {
+        transform: scale(0)
+      }
+
+      100% {
+        transform: scale(1)
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    /* Fade out overlay */
+    .nover.fading {
+      animation: fadeout .4s forwards
+    }
+
+    @keyframes fadeout {
+      to {
+        opacity: 0
+      }
+    }
+
+    /* Tooltip */
+    #tip {
+      position: fixed;
+      pointer-events: none;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      max-width: 220px;
+      z-index: 250;
+      opacity: 0;
+      transition: opacity .15s;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(8px)
+    }
+
+    #tip.v {
+      opacity: 1
+    }
+
+    #tip strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+      font-size: 13px;
+    }
+
+    #tt-c {
+      display: block;
+      color: var(--text2);
+      line-height: 1.4;
+    }
+
+    /* Loading */
+    #loading {
+      position: fixed;
+      inset: 52px 0 0 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      z-index: 50;
+      background: var(--bg);
+      transition: opacity .4s
+    }
+
+    #loading.hidden {
+      opacity: 0;
+      pointer-events: none
+    }
+
+    .ring {
+      width: 36px;
+      height: 36px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite
+    }
+
+    #loading p {
+      font-size: 13px;
+      color: var(--dim)
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 22px;
+      right: 20px;
+      font-size: 11px;
+      color: var(--dim);
+      pointer-events: none;
+      opacity: .4
+    }
+
+    .sec-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px
+    }
+
+    .edit-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--dim);
+      font-size: 15px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      transition: .15s;
+      line-height: 1
+    }
+
+    .edit-btn:hover {
+      color: var(--accent);
+      background: rgba(91, 143, 255, .1)
+    }
+
+    .edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .edit-form.hidden {
+      display: none
+    }
+
+    .edit-form input,
+    .edit-form textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      outline: none;
+      resize: none;
+      transition: border-color .15s
+    }
+
+    .edit-form input:focus,
+    .edit-form textarea:focus {
+      border-color: var(--accent)
+    }
+
+    .edit-form textarea {
+      min-height: 80px
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end
+    }
+
+    .btn-ce {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--dim);
+      font-size: 12px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: .15s
+    }
+
+    .btn-se {
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: opacity .15s
+    }
+
+    .btn-se:hover {
+      opacity: .85
+    }
+
+    .danger-zone {
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+      margin-top: 4px
+    }
+
+    .btn-delete {
+      width: 100%;
+      padding: 9px;
+      background: rgba(239, 68, 68, .07);
+      border: 1px solid rgba(239, 68, 68, .2);
+      border-radius: 8px;
+      color: #ef4444;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: .15s
+    }
+
+    .btn-delete:hover {
+      background: rgba(239, 68, 68, .14);
+      border-color: rgba(239, 68, 68, .4)
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s
+    }
+
+    #cxt-menu {
+      position: absolute;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      z-index: 350;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    #cxt-menu.hidden {
+      display: none;
+    }
+
+    .cxt-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+
+    .cxt-item:hover {
+      background: var(--surface2);
+    }
+
+    .cxt-item.danger {
+      color: #ef4444;
+    }
+
+    .cxt-item.danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    #connection-tip {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 150;
+      box-shadow: 0 4px 12px rgba(91, 143, 255, 0.3);
+      pointer-events: none;
+    }
+
+    #connection-tip.hidden {
+      display: none;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 320px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      transform: scale(0.95);
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)
+    }
+
+    .modal-overlay.open .modal {
+      transform: scale(1)
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #ef4444
+    }
+
+    .modal-desc {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.5;
+      margin-bottom: 20px
+    }
+
+    .modal-desc strong {
+      color: var(--text)
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end
+    }
+
+    .modal-actions button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: 0.15s
+    }
+
+    .btn-cancel-modal {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text)
+    }
+
+    .btn-cancel-modal:hover {
+      background: rgba(255, 255, 255, 0.1)
+    }
+
+    .btn-confirm-modal {
+      background: #ef4444;
+      border: none;
+      color: white
+    }
+
+    .btn-confirm-modal:hover {
+      background: #dc2626
+    }
+
+    /* ── Auth Overlay ── */
+    #auth-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: #0a0a0f;
+      z-index: 99999;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      opacity: 1;
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    #auth-overlay.hiding {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #auth-canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .auth-box {
+      position: relative; z-index: 1;
+      background: rgba(17, 17, 24, 0.75);
+      backdrop-filter: blur(24px) saturate(1.4);
+      -webkit-backdrop-filter: blur(24px) saturate(1.4);
+      padding: 36px 40px 32px;
+      border-radius: 20px;
+      border: 1px solid rgba(91, 143, 255, 0.18);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 48px rgba(0,0,0,0.6), 0 0 80px rgba(91,143,255,0.06);
+      width: 340px;
+      display: flex; flex-direction: column; gap: 14px;
+      transform: translateY(0);
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease;
+    }
+    .auth-logo {
+      text-align: center; margin-bottom: 4px;
+      font-size: 28px; line-height: 1;
+    }
+    .auth-box h2 {
+      font-size: 19px; font-weight: 600; text-align: center;
+      background: linear-gradient(135deg, #a0bcff, #c4b5fd);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      letter-spacing: -0.3px;
+    }
+    .auth-subtitle {
+      font-size: 12px; color: rgba(255,255,255,0.35); text-align: center;
+      margin-top: -6px; margin-bottom: 4px;
+    }
+    .auth-box input {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text); padding: 11px 14px;
+      border-radius: 10px; outline: none;
+      font-size: 13.5px; font-family: 'Inter', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      width: 100%;
+    }
+    .auth-box input:focus {
+      border-color: rgba(91, 143, 255, 0.55);
+      background: rgba(91, 143, 255, 0.07);
+      box-shadow: 0 0 0 3px rgba(91, 143, 255, 0.12);
+    }
+    .auth-box input::placeholder { color: rgba(255,255,255,0.28); }
+    .auth-submit {
+      background: linear-gradient(135deg, #5b8fff, #7c6ef5);
+      color: #fff; border: none; padding: 11px; border-radius: 10px;
+      cursor: pointer; font-weight: 600; font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.2px;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(91, 143, 255, 0.3);
+      position: relative; overflow: hidden;
+    }
+    .auth-submit:hover { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 6px 28px rgba(91, 143, 255, 0.45); }
+    .auth-submit:active { transform: translateY(0px); }
+    .auth-submit.loading { opacity: 0.7; pointer-events: none; }
+    .auth-toggle {
+      background: transparent; border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.55); padding: 10px; border-radius: 10px;
+      cursor: pointer; font-size: 13px; font-family: 'Inter', sans-serif;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .auth-toggle:hover { border-color: rgba(91,143,255,0.3); color: rgba(255,255,255,0.85); background: rgba(91,143,255,0.07); }
+    #auth-error {
+      color: #ff7b7b; font-size: 12.5px; text-align: center;
+      background: rgba(255,80,80,0.08); border: 1px solid rgba(255,80,80,0.2);
+      border-radius: 8px; padding: 8px 12px;
+      display: none;
+    }
+    #auth-error.visible { display: block; }
+    .auth-divider {
+      display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.2); font-size: 11px;
+    }
+    .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08); }
+
+    /* ── Page transition: dashboard reveal ── */
+    @keyframes authBoxEnter {
+      from { opacity: 0; transform: translateY(28px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0)   scale(1); }
+    }
+    .auth-box.entering {
+      animation: authBoxEnter 0.55s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+    }
+
+    @keyframes dashReveal {
+      from { opacity: 0; transform: scale(0.985); filter: blur(6px); }
+      to   { opacity: 1; transform: scale(1);     filter: blur(0); }
+    }
+    body.dash-enter {
+      animation: dashReveal 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    /* Logout: whole page fades before reload */
+    body.page-exit {
+      opacity: 0 !important;
+      transition: opacity 0.4s ease !important;
+      pointer-events: none;
+    }
+
+
+  </style>
+</head>
+
+<body>
+
+  <div id="auth-overlay">
+    <canvas id="auth-canvas"></canvas>
+    <div class="auth-box" id="auth-box">
+      <div class="auth-logo">⬡</div>
+      <h2 id="auth-title">Welcome Back</h2>
+      <p class="auth-subtitle" id="auth-subtitle">Sign in to your knowledge graph</p>
+      <input type="text" id="auth-username" placeholder="Username" autocomplete="username" />
+      <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" />
+      <div id="auth-error"></div>
+      <button class="auth-submit" id="auth-submit-btn" onclick="submitAuth()">Sign In</button>
+      <div class="auth-divider">or</div>
+      <button class="auth-toggle" id="auth-toggle-btn" onclick="toggleAuthMode()">Create an account</button>
+    </div>
+  </div>
+
+
+  <div id="hdr">
+    <h1> ⬡ My Knowledge Graph</h1>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="dot n"></div><span id="nc">0 node</span>
+      </div>
+      <div class="stat">
+        <div class="dot e"></div><span id="ec">0 edge</span>
+      </div>
+      <button id="theme-toggle" class="theme-btn" title="Toggle Theme">🌙</button>
+      <button class="theme-btn" title="Logout" onclick="logout()" style="display:flex; align-items:center; padding-left: 10px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="loading">
+    <div class="ring"></div>
+    <p>Loading…</p>
+  </div>
+  <div id="overlays"></div>
+  <div id="cy"></div>
+
+  <button id="btn-add">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round">
+      <line x1="7" y1="1" x2="7" y2="13" />
+      <line x1="1" y1="7" x2="13" y2="7" />
+    </svg>
+    Add Node
+  </button>
+
+  <!-- Add Node Panel -->
+  <div class="side-panel" id="add-panel">
+    <div class="panel-hdr">
+      <div class="panel-title">New Node</div>
+      <button class="close-btn" id="add-close">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="field"><label>Name</label><input id="m-name" placeholder="e.g. Transformer Architecture"
+          maxlength="255" /></div>
+      <div class="field"><label>Content</label><textarea id="m-content" placeholder="Notes about this node…"></textarea>
+      </div>
+      <div id="add-status">
+        <div class="sp-sm"></div><span id="add-msg"></span>
+      </div>
+      <button class="btn-save" id="btn-save">Save</button>
+      <div id="saved-list"></div>
+    </div>
+  </div>
+
+  <!-- Detail Panel -->
+  <div class="side-panel" id="detail-panel">
+    <div class="panel-hdr">
+      <div class="panel-title" id="dp-title">—</div>
+      <button class="close-btn" id="dp-close">✕</button>
+    </div>
+    <div class="panel-body">
+      <!-- Name -->
+      <div>
+        <div class="sec-row">
+          <div class="sec">Name</div><button class="edit-btn" onclick="editField('name')" title="Edit">✎</button>
+        </div>
+        <div class="content-box" id="dp-name-view">—</div>
+        <div class="edit-form hidden" id="dp-name-edit">
+          <input id="dp-name-input" type="text" maxlength="255" />
+          <div class="edit-actions"><button class="btn-ce" onclick="cancelEdit('name')">Cancel</button><button
+              class="btn-se" onclick="saveEdit('name')">Save</button></div>
+        </div>
+      </div>
+      <!-- Content -->
+      <div>
+        <div class="sec-row">
+          <div class="sec">Content</div><button class="edit-btn" onclick="editField('content')" title="Edit">✎</button>
+        </div>
+        <div class="content-box" id="dp-content-view">—</div>
+        <div class="edit-form hidden" id="dp-content-edit">
+          <textarea id="dp-content-input"></textarea>
+          <div class="edit-actions"><button class="btn-ce" onclick="cancelEdit('content')">Cancel</button><button
+              class="btn-se" onclick="saveEdit('content')">Save</button></div>
+        </div>
+      </div>
+      <!-- Embedding -->
+      <div>
+        <div class="sec">Embedding</div>
+        <div id="dp-emb"></div>
+      </div>
+      <!-- Connections -->
+      <div>
+        <div class="sec">Connections</div>
+        <div id="dp-edges"></div>
+      </div>
+      <!-- Delete button moved to context menu -->
+    </div>
+  </div>
+
+  <!-- Edge Detail Panel -->
+  <div class="side-panel" id="edge-panel">
+    <div class="panel-hdr">
+      <div class="panel-title" id="ep-title">—</div>
+      <button class="close-btn" id="ep-close">✕</button>
+    </div>
+    <div class="panel-body">
+      <!-- Name -->
+      <div>
+        <div class="sec-row">
+          <div class="sec">Connection Name</div><button class="edit-btn" onclick="editEdgeField('name')"
+            title="Edit">✎</button>
+        </div>
+        <div class="content-box" id="ep-name-view">—</div>
+        <div class="edit-form hidden" id="ep-name-edit">
+          <input id="ep-name-input" type="text" maxlength="255" />
+          <div class="edit-actions"><button class="btn-ce" onclick="cancelEdgeEdit('name')">Cancel</button><button
+              class="btn-se" onclick="saveEdgeEdit('name')">Save</button></div>
+        </div>
+      </div>
+      <!-- Description -->
+      <div>
+        <div class="sec-row">
+          <div class="sec">Description</div><button class="edit-btn" onclick="editEdgeField('description')"
+            title="Edit">✎</button>
+        </div>
+        <div class="content-box" id="ep-desc-view">—</div>
+        <div class="edit-form hidden" id="ep-desc-edit">
+          <textarea id="ep-desc-input"></textarea>
+          <div class="edit-actions"><button class="btn-ce"
+              onclick="cancelEdgeEdit('description')">Cancel</button><button class="btn-se"
+              onclick="saveEdgeEdit('description')">Save</button></div>
+        </div>
+      </div>
+      <!-- Delete -->
+      <div class="danger-zone"><button class="btn-delete" onclick="deleteCurrentEdge()">🗑 Delete Connection</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tip"><strong id="tt-n"></strong><span id="tt-c"></span></div>
+  <div id="hint">Hover to highlight &nbsp;·&nbsp; Click for details</div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal">
+      <div class="modal-title">Delete Node</div>
+      <div class="modal-desc">Are you sure you want to delete <strong id="del-node-name"></strong>? This will also
+        permanently remove all its connections.</div>
+      <div class="modal-actions">
+        <button class="btn-cancel-modal" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn-confirm-modal" onclick="confirmDeleteNode()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Edge Confirmation Modal -->
+  <div class="modal-overlay" id="delete-edge-modal">
+    <div class="modal">
+      <div class="modal-title">Delete Connection</div>
+      <div class="modal-desc">Are you sure you want to delete <strong id="del-edge-name"></strong>? This action cannot
+        be undone.</div>
+      <div class="modal-actions">
+        <button class="btn-cancel-modal" onclick="closeDeleteEdgeModal()">Cancel</button>
+        <button class="btn-confirm-modal" onclick="confirmDeleteEdge()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Edge Modal -->
+  <div class="modal-overlay" id="add-edge-modal">
+    <div class="modal">
+      <div class="modal-title">Create Connection</div>
+      <div class="modal-desc" id="add-edge-desc" style="margin-bottom: 15px;">Connecting Node A to Node B</div>
+      <div class="edit-form" style="margin-bottom: 20px;">
+        <input type="text" id="add-edge-name" placeholder="Connection Name (e.g. relates to)" />
+        <textarea id="add-edge-description" placeholder="Description of the connection" rows="3"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel-modal" onclick="closeAddEdgeModal()">Cancel</button>
+        <button class="btn-confirm-modal" onclick="confirmAddEdge()" style="background:var(--accent)">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cxt-menu" class="hidden">
+    <div class="cxt-item" id="cxt-add-edge">🔗 Add Connection</div>
+    <div class="cxt-item danger" id="cxt-delete-node">🗑 Delete Node</div>
+    <div class="cxt-item danger" id="cxt-delete-edge" style="display: none">🗑 Delete Connection</div>
+  </div>
+  <div id="connection-tip" class="hidden">Click a target node to connect...</div>
+
+  <script>
+
+    let authToken = localStorage.getItem('kg_token') || null;
+    let authMode = 'login';
+    let authCanvasRAF = null;
+
+    /* ── Animated graph canvas on auth screen ── */
+    function startAuthCanvas() {
+      const canvas = document.getElementById('auth-canvas');
+      const ctx = canvas.getContext('2d');
+      let W, H, nodes, edges;
+
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      // Create fake nodes
+      const N = 28;
+      nodes = Array.from({ length: N }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.35, vy: (Math.random() - 0.5) * 0.35,
+        r: 2 + Math.random() * 3.5,
+        pulse: Math.random() * Math.PI * 2,
+      }));
+      // Connect nearby nodes
+      edges = [];
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+          if (Math.hypot(dx, dy) < Math.min(W, H) * 0.22) edges.push([i, j]);
+        }
+      }
+
+      function draw(t) {
+        authCanvasRAF = requestAnimationFrame(draw);
+        ctx.clearRect(0, 0, W, H);
+
+        // Move nodes
+        nodes.forEach(n => {
+          n.x += n.vx; n.y += n.vy;
+          if (n.x < 0 || n.x > W) n.vx *= -1;
+          if (n.y < 0 || n.y > H) n.vy *= -1;
+          n.pulse += 0.018;
+        });
+
+        // Draw edges
+        edges.forEach(([a, b]) => {
+          const na = nodes[a], nb = nodes[b];
+          const dx = na.x - nb.x, dy = na.y - nb.y;
+          const dist = Math.hypot(dx, dy);
+          const maxDist = Math.min(W, H) * 0.22;
+          if (dist > maxDist) return;
+          const alpha = (1 - dist / maxDist) * 0.18;
+          ctx.beginPath();
+          ctx.moveTo(na.x, na.y);
+          ctx.lineTo(nb.x, nb.y);
+          ctx.strokeStyle = `rgba(91, 143, 255, ${alpha})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        });
+
+        // Draw nodes
+        nodes.forEach(n => {
+          const pulse = 0.5 + 0.5 * Math.sin(n.pulse);
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.r * (1 + pulse * 0.3), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(91, 143, 255, ${0.25 + pulse * 0.2})`;
+          ctx.fill();
+          // Glow
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.r * 3, 0, Math.PI * 2);
+          const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 3);
+          grad.addColorStop(0, `rgba(91, 143, 255, ${0.06 * pulse})`);
+          grad.addColorStop(1, 'transparent');
+          ctx.fillStyle = grad;
+          ctx.fill();
+        });
+      }
+      draw(0);
+    }
+
+    function stopAuthCanvas() {
+      if (authCanvasRAF) { cancelAnimationFrame(authCanvasRAF); authCanvasRAF = null; }
+    }
+
+    /* ── Auth Mode Toggle ── */
+    function toggleAuthMode() {
+      authMode = authMode === 'login' ? 'register' : 'login';
+      const box = document.getElementById('auth-box');
+      // Strip the CSS keyframe animation so our JS transition takes over
+      box.classList.remove('entering');
+      box.style.animation = 'none';
+      void box.offsetWidth; // force reflow to flush animation state
+      box.style.animation = '';
+      // Slide out
+      box.style.transition = 'transform 0.2s ease-in, opacity 0.18s ease-in';
+      box.style.transform = 'translateY(10px)';
+      box.style.opacity = '0';
+      setTimeout(() => {
+        document.getElementById('auth-title').innerText = authMode === 'login' ? 'Welcome Back' : 'Create Account';
+        document.getElementById('auth-subtitle').innerText = authMode === 'login' ? 'Sign in to your knowledge graph' : 'Start mapping your knowledge';
+        document.getElementById('auth-submit-btn').innerText = authMode === 'login' ? 'Sign In' : 'Register';
+        document.getElementById('auth-toggle-btn').innerText = authMode === 'login' ? 'Create an account' : 'I already have an account';
+        const err = document.getElementById('auth-error');
+        err.innerText = ''; err.classList.remove('visible');
+        // Slide back in from slightly above
+        box.style.transform = 'translateY(-10px)';
+        void box.offsetWidth;
+        box.style.transition = 'transform 0.32s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.28s ease-out';
+        box.style.transform = 'translateY(0)';
+        box.style.opacity = '1';
+      }, 200);
+    }
+
+    /* ── Submit Auth ── */
+    async function submitAuth() {
+      const u = document.getElementById('auth-username').value.trim();
+      const p = document.getElementById('auth-password').value;
+      const errEl = document.getElementById('auth-error');
+      const btn = document.getElementById('auth-submit-btn');
+      errEl.classList.remove('visible');
+      if (!u || !p) {
+        errEl.innerText = 'Please fill in all fields.'; errEl.classList.add('visible'); return;
+      }
+
+      btn.classList.add('loading');
+      btn.innerText = authMode === 'login' ? 'Signing in…' : 'Creating account…';
+
+      let url = authMode === 'login' ? '/auth/login' : '/auth/register';
+      let options = {};
+      if (authMode === 'login') {
+        const formData = new URLSearchParams();
+        formData.append('username', u); formData.append('password', p);
+        options = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData };
+      } else {
+        options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) };
+      }
+
+      try {
+        const res = await window.originalFetch(url, options);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Invalid credentials or user already exists.');
+        }
+        const data = await res.json();
+        authToken = data.access_token;
+        localStorage.setItem('kg_token', authToken);
+        // Step 1: freeze body opacity so dashboard doesn't pop in
+        document.body.style.opacity = '0';
+        document.body.style.transition = 'none';
+        // Step 2: fade out auth overlay
+        stopAuthCanvas();
+        const overlay = document.getElementById('auth-overlay');
+        overlay.classList.add('hiding');
+        setTimeout(async () => {
+          overlay.style.display = 'none';
+          // Step 3: load graph data (body still invisible)
+          await init();
+          // Step 4: smooth reveal of dashboard
+          document.body.style.transition = 'opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), filter 0.7s ease';
+          document.body.style.filter = 'blur(0px)';
+          document.body.style.opacity = '1';
+        }, 550);
+      } catch (e) {
+        errEl.innerText = e.message; errEl.classList.add('visible');
+        btn.classList.remove('loading');
+        btn.innerText = authMode === 'login' ? 'Sign In' : 'Register';
+        // Shake animation
+        const box = document.getElementById('auth-box');
+        box.animate([
+          { transform: 'translateX(0)' }, { transform: 'translateX(-8px)' },
+          { transform: 'translateX(8px)' }, { transform: 'translateX(-5px)' },
+          { transform: 'translateX(0)' }
+        ], { duration: 350, easing: 'ease-out' });
+      }
+    }
+
+    /* ── Allow Enter key ── */
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && document.getElementById('auth-overlay').style.display !== 'none') {
+        submitAuth();
+      }
+    });
+
+    function logout() {
+      // Fade the whole page out, then reload
+      document.body.classList.add('page-exit');
+      authToken = null;
+      localStorage.removeItem('kg_token');
+      setTimeout(() => location.reload(), 420);
+    }
+
+    // Intercept Fetch
+    window.originalFetch = window.fetch;
+    window.fetch = async function() {
+      let [resource, config] = arguments;
+      if (!config) config = {};
+      if (!config.headers) config.headers = {};
+      if (authToken) {
+        config.headers['Authorization'] = 'Bearer ' + authToken;
+      }
+      const response = await window.originalFetch(resource, config);
+      const isAuthUrl = typeof resource === 'string' ? resource.startsWith('/auth/') : false;
+      if (response.status === 401 && !isAuthUrl) {
+        logout();
+      }
+      return response;
+    };
+
+    const API = '/edges/graph';
+    const WS_PROTOCOL = location.protocol === 'https:' ? 'wss' : 'ws';
+    const WS_URL = `${WS_PROTOCOL}://${location.host}/ws/events`;
+
+    let cy = null;
+    let graphData = { elements: { nodes: [], edges: [] } };
+    let pendingNodes = new Map(); // nodeId(str) → {el, phase}
+    let rafId = null;
+    let activePanel = null; // 'add' | 'detail' | 'edge' | null
+    let connectingNode = null;
+    let targetConnectingNode = null;
+    let currentCxtNode = null;
+
+    /* ── Theme Management ── */
+    const storedTheme = localStorage.getItem('theme');
+    const isLight = storedTheme === 'light';
+    if (isLight) document.documentElement.classList.add('light');
+    document.getElementById('theme-toggle').textContent = isLight ? '☀️' : '🌙';
+
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      const root = document.documentElement;
+
+      root.classList.add('theme-transition');
+
+      root.classList.toggle('light');
+      const lightOn = root.classList.contains('light');
+      localStorage.setItem('theme', lightOn ? 'light' : 'dark');
+      document.getElementById('theme-toggle').textContent = lightOn ? '☀️' : '🌙';
+      if (cy) cy.style(getCyStyles(lightOn)).update();
+
+      setTimeout(() => root.classList.remove('theme-transition'), 400);
+    });
+
+    function getCyStyles(light) {
+      return [
+        {
+          selector: 'node', style: {
+            width: 'data(size)', height: 'data(size)', 'background-color': light ? '#e0e7ff' : '#1e2a4a',
+            'border-width': 1.5, 'border-color': light ? '#3b82f6' : '#5b8fff', 'border-opacity': .5,
+            label: 'data(label)', color: light ? '#1e3a8a' : '#c8d4f0',
+            'font-family': 'Inter,sans-serif', 'font-size': '11px', 'font-weight': '500',
+            'text-valign': 'bottom', 'text-halign': 'center', 'text-margin-y': 7,
+            'transition-property': 'opacity,border-color,border-opacity,background-color,color',
+            'transition-duration': '300ms',
+            'transition-timing-function': 'ease-out-cubic',
+            'z-index-compare': 'manual',
+            'z-index': 2
+          }
+        },
+        {
+          selector: 'edge', style: {
+            width: 1.5, 'line-color': light ? '#cbd5e1' : '#2d3a5a', 'curve-style': 'bezier', opacity: .7,
+            'transition-property': 'opacity,line-color,text-opacity,text-background-opacity', 'transition-duration': '300ms',
+            'transition-timing-function': 'ease-out-cubic',
+            'label': 'data(name)',
+            'font-family': 'Inter,sans-serif', 'font-size': '9px', 'font-weight': '600',
+            'color': light ? '#1e3a8a' : '#c8d4f0',
+            'text-opacity': 0,
+            'text-background-color': light ? '#ffffff' : '#111118',
+            'text-background-opacity': 0,
+            'text-background-padding': '3px',
+            'text-background-shape': 'roundrectangle',
+            'edge-text-rotation': 'autorotate',
+            'text-margin-y': -14,
+            'underlay-color': '#000000',
+            'underlay-padding': 15,
+            'underlay-opacity': 0.001,
+            'text-wrap': 'wrap',
+            'text-max-width': '80px',
+            'z-index-compare': 'manual',
+            'z-index': 1
+          }
+        },
+        { selector: 'node.pending', style: { 'border-color': 'var(--accent)', 'border-opacity': 1, 'border-width': 2 } },
+        { selector: 'node.faded', style: { opacity: .4 } },
+        { selector: 'edge.faded', style: { opacity: .25 } },
+        { selector: 'node.hl, node.active-nb', style: { 'border-color': light ? '#2563eb' : '#7aa3ff', 'border-opacity': 1, 'border-width': 2, color: light ? '#1e3a8a' : '#e8f0ff', opacity: 1, 'z-index': 1000 } },
+        { selector: 'node.selected', style: { 'border-color': light ? '#7c3aed' : '#a78bfa', 'border-opacity': 1, 'border-width': 2.5, color: light ? '#0f172a' : '#fff', opacity: 1, 'z-index': 1000 } },
+        { selector: 'edge.hl, edge.active-nb', style: { 'line-color': light ? '#2563eb' : '#5b8fff', width: 2.5, opacity: .9, 'text-opacity': 1, 'text-background-opacity': 0.85, 'z-index': 1001 } },
+        { selector: 'edge.hover', style: { width: 3.5, opacity: 0.9, 'line-color': light ? '#2563eb' : '#5b8fff', 'text-opacity': 1, 'text-background-opacity': 0.85, 'z-index': 1002 } },
+      ];
+    }
+
+    /* ── Panel management ── */
+    function openPanel(name) {
+      // Close all first
+      document.getElementById('add-panel').classList.remove('open');
+      document.getElementById('detail-panel').classList.remove('open');
+      document.getElementById('edge-panel').classList.remove('open');
+      document.getElementById('cy').classList.remove('add-open', 'detail-open', 'edge-open');
+
+      if (name === 'add') {
+        document.getElementById('add-panel').classList.add('open');
+        document.getElementById('cy').classList.add('add-open');
+      } else if (name === 'detail') {
+        document.getElementById('detail-panel').classList.add('open');
+        document.getElementById('cy').classList.add('detail-open');
+      } else if (name === 'edge') {
+        document.getElementById('edge-panel').classList.add('open');
+        document.getElementById('cy').classList.add('detail-open'); // reuse margin
+      }
+      activePanel = name;
+    }
+
+    function closeAllPanels() {
+      document.getElementById('add-panel').classList.remove('open');
+      document.getElementById('detail-panel').classList.remove('open');
+      document.getElementById('edge-panel').classList.remove('open');
+      document.getElementById('cy').classList.remove('add-open', 'detail-open', 'edge-open');
+      activePanel = null;
+      if (cy) {
+        cy.elements().removeClass('selected active-nb hl faded');
+        cy.nodes().forEach(n => {
+          if (!n.hasClass('dying')) {
+            n.animate({ style: { width: n.data('size'), height: n.data('size') } }, { duration: 250, queue: false });
+          }
+        });
+      }
+    }
+
+    document.getElementById('btn-add').addEventListener('click', () => openPanel('add'));
+    document.getElementById('add-close').addEventListener('click', closeAllPanels);
+    document.getElementById('dp-close').addEventListener('click', closeAllPanels);
+    document.getElementById('ep-close').addEventListener('click', closeAllPanels);
+
+    document.getElementById('cxt-add-edge').addEventListener('click', () => {
+      document.getElementById('cxt-menu').classList.add('hidden');
+      if (currentCxtNode) {
+        connectingNode = currentCxtNode;
+        cy.elements().removeClass('selected active-nb hl faded');
+        connectingNode.addClass('selected');
+        document.getElementById('connection-tip').classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('cxt-delete-node').addEventListener('click', () => {
+      document.getElementById('cxt-menu').classList.add('hidden');
+      if (currentCxtNode) {
+        currentNodeId = String(currentCxtNode.id());
+        document.getElementById('del-node-name').textContent = `"${currentCxtNode.data('name')}"`;
+        document.getElementById('delete-modal').classList.add('open');
+      }
+    });
+
+    document.getElementById('cxt-delete-edge').addEventListener('click', () => {
+      document.getElementById('cxt-menu').classList.add('hidden');
+      if (currentCxtEdge) {
+        currentEdgeId = parseInt(currentCxtEdge.id().replace('e', ''));
+        deleteCurrentEdge();
+      }
+    });
+
+    /* ── WebSocket ── */
+    let ws;
+    function connectWS() {
+      ws = new WebSocket(WS_URL + '?token=' + authToken);
+      ws.onmessage = e => handleWS(JSON.parse(e.data));
+      ws.onclose = () => setTimeout(connectWS, 2000);
+      setInterval(() => ws && ws.readyState === 1 && ws.send('ping'), 20000);
+    }
+
+    function handleWS(msg) {
+      if (msg.type !== 'node_status') return;
+      const id = String(msg.node_id);
+
+      if (msg.status === 'embedding_done') {
+        setPhase(id, 'llm');
+      } else if (msg.status === 'processing_edges' || msg.status === 'edge_progress') {
+        setPhase(id, 'llm');
+      } else if (msg.status === 'done') {
+        // Add new edges to graph
+        (msg.new_edges || []).forEach(ed => {
+          if (!cy.getElementById(ed.data.id).length) {
+            cy.add(ed);
+            graphData.elements.edges.push(ed);
+          }
+        });
+        updateStats();
+        setPhase(id, 'check');
+        // Update node state
+        const n = cy.getElementById(id);
+        if (n) { n.removeClass('pending'); n.data('has_embedding', true); }
+        setTimeout(() => removeOverlay(id), 2200);
+      } else if (msg.status === 'error') {
+        removeOverlay(id);
+      }
+    }
+
+    /* ── Cytoscape ── */
+    function updateNodeSizes() {
+      if (!cy) return;
+      cy.nodes().forEach(n => {
+        const d = n.degree();
+        const base = Math.min(140, 46 + (d * 8));
+        n.data('size', base);
+        n.data('hl_size', base + 6);
+        n.data('sel_size', base + 10);
+
+        let currentTarget = base;
+        if (n.hasClass('selected')) currentTarget = base + 10;
+        else if (n.hasClass('hl') || n.hasClass('active-nb')) currentTarget = base + 6;
+
+        n.animate({ style: { width: currentTarget, height: currentTarget } }, { duration: 900, easing: 'ease-out-cubic', queue: false });
+      });
+    }
+
+    async function init() {
+      const r = await fetch(API);
+      graphData = await r.json();
+      document.getElementById('loading').classList.add('hidden');
+
+      // Pre-calculate degrees for initial render
+      const degrees = {};
+      if (graphData.elements.edges) {
+        graphData.elements.edges.forEach(e => {
+          degrees[e.data.source] = (degrees[e.data.source] || 0) + 1;
+          degrees[e.data.target] = (degrees[e.data.target] || 0) + 1;
+        });
+      }
+      if (graphData.elements.nodes) {
+        graphData.elements.nodes.forEach(n => {
+          const d = degrees[n.data.id] || 0;
+          const base = Math.min(140, 46 + (d * 8));
+          n.data.size = base;
+          n.data.hl_size = base + 6;
+          n.data.sel_size = base + 10;
+        });
+      }
+
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements: graphData.elements,
+        style: getCyStyles(document.documentElement.classList.contains('light')),
+        layout: { name: 'cose', animate: false, fit: true, padding: 220, nodeRepulsion: node => 8000 + ((node.data('size') || 46) * 60), edgeElasticity: 200, gravity: 80, numIter: 800 },
+        userZoomingEnabled: false, // We will handle zooming manually for momentum
+        boxSelectionEnabled: false // Disable the marquee selection box
+      });
+
+      updateStats(); // cy hazır olduktan sonra
+
+      let hoverTimeout = null;
+      let hoveredNode = null;
+
+      cy.on('mouseover', 'node', e => {
+        if (connectingNode) {
+          if (e.target !== connectingNode) {
+            e.target.addClass('hl');
+          }
+          return;
+        }
+
+        const nd = e.target;
+        hoveredNode = nd;
+
+        clearTimeout(hoverTimeout);
+        hoverTimeout = setTimeout(() => {
+          if (hoveredNode !== nd) return;
+          const nb = nd.neighborhood();
+          cy.batch(() => {
+            cy.elements().removeClass('faded hl');
+            cy.elements().not(nb).not(nd).addClass('faded');
+            nb.addClass('hl');
+            nd.addClass('hl');
+          });
+
+          nd.animate({ style: { width: nd.data('hl_size'), height: nd.data('hl_size') } }, { duration: 250, queue: false });
+          nb.nodes().forEach(n => {
+            n.animate({ style: { width: n.data('hl_size'), height: n.data('hl_size') } }, { duration: 250, queue: false });
+          });
+
+          showTip(e.originalEvent.clientX, e.originalEvent.clientY, nd.data());
+        }, 40);
+      });
+
+      cy.on('mouseout', 'node', e => {
+        if (connectingNode) {
+          if (e.target !== connectingNode) {
+            e.target.removeClass('hl');
+          }
+          return;
+        }
+
+        hoveredNode = null;
+        clearTimeout(hoverTimeout);
+
+        hoverTimeout = setTimeout(() => {
+          if (hoveredNode) return;
+          cy.batch(() => {
+            cy.elements().removeClass('faded hl');
+          });
+
+          cy.nodes().forEach(n => {
+            const target = n.hasClass('selected') ? n.data('sel_size') : n.data('size');
+            n.animate({ style: { width: target, height: target } }, { duration: 250, queue: false });
+          });
+
+          hideTip();
+        }, 40);
+      });
+      cy.on('mousemove', 'node', e => { if (!connectingNode) moveTip(e.originalEvent.clientX, e.originalEvent.clientY); });
+
+      cy.on('tap', 'node', e => {
+        document.getElementById('cxt-menu').classList.add('hidden');
+        if (connectingNode) {
+          if (e.target.id() !== connectingNode.id()) {
+            targetConnectingNode = e.target;
+            document.getElementById('add-edge-desc').textContent = `Connecting ${connectingNode.data('name')} to ${targetConnectingNode.data('name')}`;
+            document.getElementById('add-edge-name').value = '';
+            document.getElementById('add-edge-description').value = '';
+            document.getElementById('add-edge-modal').classList.add('open');
+          } else {
+            // Cancel connection mode if they tap the same node
+            connectingNode.removeClass('selected');
+            connectingNode = null;
+            document.getElementById('connection-tip').classList.add('hidden');
+          }
+          return;
+        }
+
+        cy.elements().removeClass('selected active-nb hl faded');
+        e.target.addClass('selected');
+        e.target.neighborhood().addClass('active-nb');
+
+        cy.nodes().forEach(n => {
+          let s = n.data('size');
+          if (n.id() === e.target.id()) s = n.data('sel_size');
+          else if (e.target.neighborhood('node').has(n)) s = n.data('hl_size');
+          n.animate({ style: { width: s, height: s } }, { duration: 250, queue: false });
+        });
+
+        showDetail(e.target.data());
+      });
+
+      cy.on('tap', 'edge', e => {
+        document.getElementById('cxt-menu').classList.add('hidden');
+        if (connectingNode) return;
+        cy.elements().removeClass('selected active-nb hl faded hover');
+        e.target.addClass('selected');
+        showEdgeDetail(e.target.data());
+      });
+
+      cy.on('mouseover', 'edge', e => {
+        cy.userPanningEnabled(false);
+        e.target.addClass('hover');
+      });
+
+      cy.on('mouseout', 'edge', e => {
+        cy.userPanningEnabled(true);
+        e.target.removeClass('hover');
+      });
+
+      cy.on('cxttap', 'node', e => {
+        hideTip();
+        const node = e.target;
+        currentCxtNode = node;
+        currentCxtEdge = null;
+        document.getElementById('cxt-add-edge').style.display = 'block';
+        document.getElementById('cxt-delete-node').style.display = 'block';
+        document.getElementById('cxt-delete-edge').style.display = 'none';
+
+        const cxt = document.getElementById('cxt-menu');
+        cxt.style.left = e.originalEvent.clientX + 'px';
+        cxt.style.top = e.originalEvent.clientY + 'px';
+        cxt.classList.remove('hidden');
+      });
+
+      cy.on('cxttap', 'edge', e => {
+        hideTip();
+        const edge = e.target;
+        currentCxtEdge = edge;
+        currentCxtNode = null;
+        document.getElementById('cxt-add-edge').style.display = 'none';
+        document.getElementById('cxt-delete-node').style.display = 'none';
+        document.getElementById('cxt-delete-edge').style.display = 'block';
+
+        const cxt = document.getElementById('cxt-menu');
+        cxt.style.left = e.originalEvent.clientX + 'px';
+        cxt.style.top = e.originalEvent.clientY + 'px';
+        cxt.classList.remove('hidden');
+      });
+
+      cy.on('tap', e => {
+        if (e.target === cy) {
+          document.getElementById('cxt-menu').classList.add('hidden');
+          if (connectingNode) {
+            connectingNode = null;
+            document.getElementById('connection-tip').classList.add('hidden');
+          }
+          cy.elements().removeClass('selected active-nb hl faded');
+          cy.nodes().forEach(n => {
+            n.animate({ style: { width: n.data('size'), height: n.data('size') } }, { duration: 250, queue: false });
+          });
+          closeAllPanels();
+        }
+      });
+      cy.on('pan zoom', updateOverlayPositions);
+      connectWS();
+
+      /* ── Smooth Spring Zoom ── */
+      let targetZoomPos = Math.log(1);
+      let zoomPos = Math.log(1);
+      let zoomVel = 0;
+      let zoomRaf = null;
+      let mouseX = window.innerWidth / 2;
+      let mouseY = window.innerHeight / 2;
+
+      const cyContainer = document.getElementById('cy');
+      cyContainer.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = cyContainer.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+
+        let delta = e.deltaY;
+        if (e.deltaMode === 1) delta *= 16;
+
+        let factor = e.ctrlKey ? 0.0015 : 0.003;
+
+        if (!zoomRaf) {
+          // Animasyon o an duruyorsa, mevcut zoom'u alıp hedefe ekle
+          zoomPos = Math.log(cy.zoom());
+          targetZoomPos = zoomPos;
+          zoomRaf = requestAnimationFrame(springZoomLoop);
+        }
+
+        targetZoomPos -= delta * factor;
+        targetZoomPos = Math.max(Math.log(0.1), Math.min(Math.log(5), targetZoomPos));
+      }, { passive: false });
+
+      function springZoomLoop() {
+        let tension = 0.035; // İvmelenme gücü (yavaş başlar)
+        let damping = 0.22;  // Yavaşça durmasını sağlayan sürtünme
+
+        let distance = targetZoomPos - zoomPos;
+        zoomVel += distance * tension;
+        zoomVel *= (1 - damping);
+        zoomPos += zoomVel;
+
+        if (Math.abs(distance) < 0.001 && Math.abs(zoomVel) < 0.0001) {
+          zoomRaf = null;
+          return;
+        }
+
+        cy.zoom({
+          level: Math.exp(zoomPos),
+          renderedPosition: { x: mouseX, y: mouseY }
+        });
+
+        zoomRaf = requestAnimationFrame(springZoomLoop);
+      }
+    }
+
+    /* ── Save node ── */
+    document.getElementById('btn-save').addEventListener('click', async () => {
+      const name = document.getElementById('m-name').value.trim();
+      const content = document.getElementById('m-content').value.trim();
+      if (!name || !content) { setStatus('Name and content are required.', false); return; }
+
+      document.getElementById('btn-save').disabled = true;
+      setStatus('Computing embedding…', true);
+
+      // Geçici node — görünmez, sadece overlay için yer tutar
+      const tempId = `temp_${Date.now()}`;
+      const vpExt = cy.extent();
+      const vpCenter = { x: (vpExt.x1 + vpExt.x2) / 2, y: (vpExt.y1 + vpExt.y2) / 2 };
+      cy.add({ data: { id: tempId, label: name, name, content, has_embedding: false } });
+      const tNode = cy.getElementById(tempId);
+      tNode.style({ opacity: 0, width: 1, height: 1 });
+      tNode.position(vpCenter);
+      tNode.addClass('pending');
+      addOverlay(tempId, 'embed');
+
+      let node;
+      try {
+        const r = await fetch('/nodes/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, content }) });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        node = await r.json();
+      } catch (e) {
+        setStatus('Error: ' + e.message, false);
+        cy.remove(cy.getElementById(tempId));
+        removeOverlay(tempId);
+        document.getElementById('btn-save').disabled = false;
+        return;
+      }
+
+      // Geçici node'u gerçeğiyle değiştir
+      removeOverlay(tempId);
+      cy.remove(cy.getElementById(tempId));
+
+      const realId = String(node.id);
+      const cyNode = { data: { id: realId, label: node.name, name: node.name, content: node.content, created_at: node.created_at, has_embedding: true } };
+      cy.add(cyNode);
+      graphData.elements.nodes.push(cyNode);
+      updateStats();
+
+      const rNode = cy.getElementById(realId);
+      rNode.addClass('pending');
+
+      // Graf merkezinde opacity:0, size:1 olarak doğar
+      const ext = cy.extent();
+      rNode.style({ opacity: 0, width: 1, height: 1 });
+      rNode.position({ x: (ext.x1 + ext.x2) / 2, y: (ext.y1 + ext.y2) / 2 });
+
+      addOverlay(realId, 'embed'); // WS: embedding_done→llm, done→check
+
+      // 600ms ease-out-cubic: opacity:1, size:46
+      rNode.animate(
+        { style: { opacity: 1, width: 46, height: 46 } },
+        { duration: 600, easing: 'ease-out-cubic', complete: () => smoothRelayout() }
+      );
+
+      // Kaydet log
+      const li = document.createElement('div');
+      li.style.cssText = 'font-size:12px;color:var(--dim);padding:6px 0;border-top:1px solid var(--border)';
+      li.textContent = `✓ ${node.name} (#${node.id})`;
+      document.getElementById('saved-list').prepend(li);
+
+      setStatus('Waiting for edges…', false);
+      document.getElementById('btn-save').disabled = false;
+      document.getElementById('m-name').value = '';
+      document.getElementById('m-content').value = '';
+    });
+
+    /* ── Smooth layout transition ──
+       1. Mevcut pozisyonları kaydet
+       2. Cose layout'u ANİMASYONSUZ çalıştır (fizik simülasyonunu gizle)
+       3. Hedef pozisyonları kaydet, sonra eski pozisyonlara geri dön
+       4. Tüm node'ları aynı anda ease-out ile hedefe kaydır                  */
+    function smoothRelayout() {
+      const saved = {};
+      cy.nodes().forEach(n => { saved[n.id()] = { ...n.position() }; });
+
+      const lay = cy.layout({
+        name: 'cose', animate: false, fit: false, randomize: false,
+        nodeRepulsion: node => 8000 + ((node.data('size') || 46) * 60), edgeElasticity: 200, gravity: 80, numIter: 600,
+      });
+
+      lay.on('layoutstop', () => {
+        const targets = {};
+        cy.nodes().forEach(n => { targets[n.id()] = { ...n.position() }; });
+
+        // Eski konumlara anında geri dön
+        cy.nodes().forEach(n => { if (saved[n.id()]) n.position(saved[n.id()]); });
+
+        // Hepsini aynı anda hedef konuma kaydır
+        cy.nodes().forEach(n => {
+          if (!targets[n.id()]) return;
+          n.animate(
+            { position: targets[n.id()] },
+            { duration: 900, easing: 'ease-out-cubic' }
+          );
+        });
+      });
+
+      lay.run();
+    }
+
+    function setStatus(msg, loading) {
+
+      document.getElementById('add-msg').textContent = msg;
+      const el = document.getElementById('add-status');
+      el.classList.toggle('loading', loading);
+    }
+
+    /* ── Overlays ── */
+    function makeOverlayInner(phase) {
+      if (phase === 'embed') return '<div class="ph-embed"></div>';
+      if (phase === 'llm') return '<div class="ph-llm"><div class="ph-llm-dot"></div><div class="ph-llm-dot"></div><div class="ph-llm-dot"></div></div>';
+      if (phase === 'check') return `<div class="ph-check"><svg viewBox="0 0 36 36" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="14" stroke="rgba(52,211,153,.2)" fill="none"/><polyline points="10,18 15,23 26,12"/></svg></div>`;
+      return '';
+    }
+
+    function addOverlay(nodeId, phase) {
+      const el = document.createElement('div');
+      el.className = 'nover';
+      el.innerHTML = makeOverlayInner(phase);
+      document.getElementById('overlays').appendChild(el);
+      pendingNodes.set(nodeId, { el, phase });
+      startRaf();
+      updateOverlayPositions();
+    }
+
+    function setPhase(nodeId, phase) {
+      const entry = pendingNodes.get(nodeId);
+      if (!entry) return;
+      entry.phase = phase;
+      entry.el.innerHTML = makeOverlayInner(phase);
+    }
+
+    function removeOverlay(nodeId) {
+      const entry = pendingNodes.get(nodeId);
+      if (!entry) return;
+      entry.el.classList.add('fading');
+      setTimeout(() => entry.el.remove(), 400);
+      pendingNodes.delete(nodeId);
+    }
+
+    function startRaf() {
+      if (rafId) return;
+      function loop() {
+        updateOverlayPositions();
+        if (pendingNodes.size > 0) rafId = requestAnimationFrame(loop);
+        else rafId = null;
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function updateOverlayPositions() {
+      if (!cy) return;
+      const rect = document.getElementById('cy').getBoundingClientRect();
+      for (const [nodeId, { el }] of pendingNodes) {
+        const nd = cy.getElementById(nodeId);
+        if (!nd || !nd.length) continue;
+        const rp = nd.renderedPosition();
+        const sz = nd.renderedWidth();
+        el.style.left = (rect.left + rp.x - sz / 2) + 'px';
+        el.style.top = (rect.top + rp.y - sz / 2) + 'px';
+        el.style.width = sz + 'px';
+        el.style.height = sz + 'px';
+      }
+    }
+
+    /* ── Detail panel ── */
+    let currentNodeId = null;
+
+    function showDetail(data) {
+      currentNodeId = String(data.id);
+      document.getElementById('dp-title').textContent = data.name;
+
+      // Name
+      document.getElementById('dp-name-view').textContent = data.name;
+      document.getElementById('dp-name-input').value = data.name;
+      cancelEdit('name');
+
+      // Content
+      document.getElementById('dp-content-view').textContent = data.content || '—';
+      document.getElementById('dp-content-input').value = data.content || '';
+      cancelEdit('content');
+
+      // Embedding
+      document.getElementById('dp-emb').innerHTML = data.has_embedding
+        ? '<span class="badge ok">✓ Embedding ready (1536 dims)</span>'
+        : '<span class="badge no">— No embedding</span>';
+
+      // Connections
+      const nodeEdges = graphData.elements.edges.filter(e => e.data.source === data.id || e.data.target === data.id);
+      const edEl = document.getElementById('dp-edges');
+      if (!nodeEdges.length) {
+        edEl.innerHTML = '<p style="font-size:12px;color:var(--dim)">No connections yet.</p>';
+      } else {
+        edEl.innerHTML = nodeEdges.map(e => {
+          const pid = e.data.source === data.id ? e.data.target : e.data.source;
+          const pn = (graphData.elements.nodes.find(n => n.data.id === pid) || { data: { name: '#' + pid } }).data.name;
+          const dir = e.data.source === data.id ? '→' : '←';
+          const pct = Math.round(e.data.similarity * 100);
+          return `<div class="edge-card" onclick="openEdgeDetailFromCard('${e.data.id}')" title="Click to edit connection">
+        <div class="ec-top"><span class="ec-name">${e.data.name}</span><span class="sim-pill">${pct}%</span></div>
+        <p class="ec-desc">${e.data.description}</p>
+        <p class="ec-peer">${dir} <span>${pn}</span></p>
+      </div>`;
+        }).join('');
+      }
+      openPanel('detail');
+    }
+
+    function editField(field) {
+      document.getElementById(`dp-${field}-view`).style.display = 'none';
+      document.getElementById(`dp-${field}-edit`).classList.remove('hidden');
+      document.getElementById(`dp-${field}-input`).focus();
+    }
+
+    function openEdgeDetailFromCard(edgeId) {
+      const el = cy.getElementById(edgeId);
+      if (el && el.length) {
+        cy.elements().removeClass('selected active-nb hl faded');
+        el.addClass('selected');
+        showEdgeDetail(el.data());
+      }
+    }
+
+    function cancelEdit(field) {
+      document.getElementById(`dp-${field}-view`).style.display = '';
+      document.getElementById(`dp-${field}-edit`).classList.add('hidden');
+    }
+
+    async function saveEdit(field) {
+      const input = document.getElementById(`dp-${field}-input`);
+      const value = input.value.trim();
+      if (!value || !currentNodeId) return;
+      try {
+        const r = await fetch(`/nodes/${currentNodeId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: value })
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const updated = await r.json();
+        // Update local data + Cytoscape
+        const nd = graphData.elements.nodes.find(n => n.data.id === currentNodeId);
+        if (nd) { nd.data[field] = value; if (field === 'name') nd.data.label = value; }
+        const cn = cy.getElementById(currentNodeId);
+        cn.data(field, value);
+        if (field === 'name') { cn.data('label', value); document.getElementById('dp-title').textContent = value; }
+        document.getElementById(`dp-${field}-view`).textContent = value;
+        cancelEdit(field);
+      } catch (e) { alert('Update failed: ' + e.message); }
+    }
+
+    function deleteCurrentNode() {
+      if (!currentNodeId) return;
+      const nd = graphData.elements.nodes.find(n => n.data.id === currentNodeId);
+      const name = nd ? nd.data.name : `#${currentNodeId}`;
+
+      document.getElementById('del-node-name').textContent = `"${name}"`;
+      document.getElementById('delete-modal').classList.add('open');
+    }
+
+    /* ── Edge Add / Edit / Delete ── */
+    let currentEdgeId = null;
+
+    function closeAddEdgeModal() {
+      document.getElementById('add-edge-modal').classList.remove('open');
+      if (connectingNode) connectingNode.removeClass('selected');
+      connectingNode = null;
+      targetConnectingNode = null;
+      document.getElementById('connection-tip').classList.add('hidden');
+    }
+
+    async function confirmAddEdge() {
+      const name = document.getElementById('add-edge-name').value.trim();
+      const desc = document.getElementById('add-edge-description').value.trim();
+      if (!name) return;
+
+      const payload = {
+        source_id: parseInt(connectingNode.id()),
+        target_id: parseInt(targetConnectingNode.id()),
+        name: name,
+        description: desc
+      };
+      closeAddEdgeModal();
+
+      try {
+        const r = await fetch('/edges/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (r.ok) {
+          const edgeData = await r.json();
+          const cyEdge = {
+            data: {
+              id: 'e' + edgeData.id,
+              source: String(edgeData.source_id),
+              target: String(edgeData.target_id),
+              name: edgeData.name,
+              description: edgeData.description,
+              similarity: edgeData.similarity,
+              created_at: edgeData.created_at
+            }
+          };
+          cy.add(cyEdge);
+          graphData.elements.edges.push(cyEdge);
+          updateStats();
+        } else {
+          alert('Failed to add connection');
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    function showEdgeDetail(d) {
+      openPanel('edge');
+      currentEdgeId = parseInt(d.id.replace('e', ''));
+      document.getElementById('ep-title').textContent = d.name;
+      document.getElementById('ep-name-view').textContent = d.name;
+      document.getElementById('ep-desc-view').textContent = d.description || '—';
+      cancelEdgeEdit('name');
+      cancelEdgeEdit('description');
+    }
+
+    function editEdgeField(field) {
+      document.getElementById(`ep-${field}-view`).style.display = 'none';
+      document.getElementById(`ep-${field}-edit`).classList.remove('hidden');
+      document.getElementById(`ep-${field}-input`).value = document.getElementById(`ep-${field}-view`).textContent === '—' ? '' : document.getElementById(`ep-${field}-view`).textContent;
+      document.getElementById(`ep-${field}-input`).focus();
+    }
+
+    function cancelEdgeEdit(field) {
+      document.getElementById(`ep-${field}-view`).style.display = '';
+      document.getElementById(`ep-${field}-edit`).classList.add('hidden');
+    }
+
+    async function saveEdgeEdit(field) {
+      const input = document.getElementById(`ep-${field}-input`);
+      const value = input.value.trim();
+      if (!value && field === 'name') return;
+      if (!currentEdgeId) return;
+
+      const payload = {}; payload[field] = value;
+      try {
+        const r = await fetch(`/edges/${currentEdgeId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const updated = await r.json();
+
+        const ed = graphData.elements.edges.find(e => e.data.id === 'e' + currentEdgeId);
+        if (ed) { ed.data[field] = updated[field]; }
+        const ce = cy.getElementById('e' + currentEdgeId);
+        if (ce.length) { ce.data(field, updated[field]); }
+
+        if (field === 'name') document.getElementById('ep-title').textContent = updated.name;
+        document.getElementById(`ep-${field}-view`).textContent = updated[field] || '—';
+        cancelEdgeEdit(field);
+      } catch (e) { alert('Update failed: ' + e.message); }
+    }
+
+    function deleteCurrentEdge() {
+      if (!currentEdgeId) return;
+      const ed = graphData.elements.edges.find(e => e.data.id === 'e' + currentEdgeId);
+      const name = ed ? ed.data.name : `Connection #${currentEdgeId}`;
+      document.getElementById('del-edge-name').textContent = `"${name}"`;
+      document.getElementById('delete-edge-modal').classList.add('open');
+    }
+
+    function closeDeleteEdgeModal() {
+      document.getElementById('delete-edge-modal').classList.remove('open');
+    }
+
+    async function confirmDeleteEdge() {
+      if (!currentEdgeId) return;
+      closeDeleteEdgeModal();
+
+      try {
+        const r = await fetch(`/edges/${currentEdgeId}`, { method: 'DELETE' });
+        if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
+
+        cy.remove(cy.getElementById('e' + currentEdgeId));
+        graphData.elements.edges = graphData.elements.edges.filter(e => e.data.id !== 'e' + currentEdgeId);
+        updateStats();
+        closeAllPanels();
+      } catch (e) { alert('Delete failed: ' + e.message); }
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.remove('open');
+    }
+
+    async function confirmDeleteNode() {
+      if (!currentNodeId) return;
+      closeDeleteModal();
+
+      try {
+        const r = await fetch(`/nodes/${currentNodeId}`, { method: 'DELETE' });
+        if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
+
+        const nd = cy.getElementById(currentNodeId);
+        if (nd.length > 0) {
+          nd.addClass('dying');
+          closeAllPanels();
+
+          const cw = nd.width();
+          const ch = nd.height();
+          nd.connectedEdges().animate({ style: { opacity: 0 } }, { duration: 250, queue: false });
+
+          nd.animate({
+            style: { width: cw * 0.8, height: ch * 0.8, 'border-width': 4 }
+          }, {
+            duration: 120,
+            easing: 'ease-out-cubic',
+            queue: true
+          }).animate({
+            style: {
+              width: cw * 1.6,
+              height: ch * 1.6,
+              'border-width': 40,
+              'background-opacity': 0,
+              'border-opacity': 0,
+              'text-opacity': 0,
+              opacity: 0
+            }
+          }, {
+            duration: 200,
+            easing: 'ease-out-quint',
+            queue: true,
+            complete: () => {
+              cy.remove(nd);
+              graphData.elements.nodes = graphData.elements.nodes.filter(n => n.data.id !== currentNodeId);
+              graphData.elements.edges = graphData.elements.edges.filter(e => e.data.source !== currentNodeId && e.data.target !== currentNodeId);
+              updateStats();
+            }
+          });
+        } else {
+          graphData.elements.nodes = graphData.elements.nodes.filter(n => n.data.id !== currentNodeId);
+          graphData.elements.edges = graphData.elements.edges.filter(e => e.data.source !== currentNodeId && e.data.target !== currentNodeId);
+          updateStats();
+          closeAllPanels();
+        }
+      } catch (e) { alert('Delete failed: ' + e.message); }
+    }
+
+    /* ── Stats ── */
+    function updateStats() {
+      updateNodeSizes();
+      document.getElementById('nc').textContent = (cy ? cy.nodes().length : 0) + ' node';
+      document.getElementById('ec').textContent = (cy ? cy.edges().length : 0) + ' edge';
+    }
+
+    /* ── Tooltip ── */
+    const tip = document.getElementById('tip');
+    function showTip(x, y, d) { document.getElementById('tt-n').textContent = d.name; document.getElementById('tt-c').textContent = (d.content || '').slice(0, 80) + ((d.content || '').length > 80 ? '…' : ''); moveTip(x, y); tip.classList.add('v'); }
+    function moveTip(x, y) { tip.style.left = (x + 14) + 'px'; tip.style.top = (y + 14) + 'px'; }
+    function hideTip() { tip.classList.remove('v'); }
+
+    async function initApp() {
+      if (!authToken) {
+        const overlay = document.getElementById('auth-overlay');
+        overlay.style.display = 'flex';
+        // Trigger entrance animation on the card
+        const box = document.getElementById('auth-box');
+        box.classList.remove('entering');
+        void box.offsetWidth; // force reflow
+        box.classList.add('entering');
+        startAuthCanvas();
+        return;
+      }
+      document.getElementById('auth-overlay').style.display = 'none';
+      await init();
+    }
+    
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+
+</html>
