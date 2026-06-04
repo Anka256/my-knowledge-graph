@@ -4,9 +4,9 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 class NodeStatus(str, Enum):
-    seedling = "seedling"
-    growing = "growing"
-    mature = "mature"
+    draft = "draft"
+    in_progress = "in progress"
+    consolidated = "consolidated"
 
 class NodeCreate(BaseModel):
     """Request body for POST /nodes/."""
@@ -14,7 +14,7 @@ class NodeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, examples=["Artificial Intelligence"])
     content: str = Field(..., min_length=1, examples=["Notes on artificial intelligence..."])
     tags: Optional[List[str]] = Field(default_factory=list)
-    status: Optional[NodeStatus] = Field(default=NodeStatus.seedling)
+    status: Optional[NodeStatus] = Field(default=NodeStatus.draft)
 
 class NodeUpdate(BaseModel):
     """Request body for PATCH /nodes/{id}. All fields are optional."""

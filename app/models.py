@@ -11,9 +11,9 @@ from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 import enum
 
 class NodeStatus(str, enum.Enum):
-    seedling = "seedling"
-    growing = "growing"
-    mature = "mature"
+    draft = "draft"
+    in_progress = "in progress"
+    consolidated = "consolidated"
 
 class User(Base):
     __tablename__ = "users"
@@ -42,7 +42,7 @@ class Node(Base):
         Vector(1536), nullable=True
     )
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), server_default='{}')
-    status: Mapped[NodeStatus] = mapped_column(String(50), server_default="seedling")
+    status: Mapped[NodeStatus] = mapped_column(String(50), server_default="draft")
     highlights: Mapped[list[dict]] = mapped_column(JSONB, server_default='[]')
     citations: Mapped[list[dict]] = mapped_column(JSONB, server_default='[]')
 

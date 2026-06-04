@@ -261,6 +261,22 @@
       min-height: 100px
     }
 
+    .ProseMirror {
+      outline: none;
+      min-height: 100%;
+      word-wrap: break-word;
+    }
+    .ProseMirror p.is-editor-empty:first-child::before {
+      content: attr(data-placeholder);
+      float: left;
+      color: var(--dim);
+      pointer-events: none;
+      height: 0;
+    }
+    .ProseMirror p {
+      margin-bottom: 0.5em;
+    }
+
     #add-status {
       font-size: 12px;
       color: var(--accent);
@@ -1047,9 +1063,18 @@
       <button class="close-btn" id="add-close">✕</button>
     </div>
     <div class="panel-body">
-      <div class="field"><label>Name</label><input id="m-name" placeholder="e.g. Transformer Architecture"
-          maxlength="255" /></div>
-      <div class="field"><label>Content</label><textarea id="m-content" placeholder="Notes about this node…"></textarea>
+      <div class="field"><label>Name</label><input id="m-name" placeholder="e.g. Transformer Architecture" maxlength="255" /></div>
+      <div class="field"><label>Tags</label><input id="m-tags" placeholder="Comma separated, e.g. ai, math" /></div>
+      <div class="field">
+        <label>Status</label>
+        <select id="m-status" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;">
+          <option value="draft">✏️ Draft</option>
+          <option value="in progress">⚙️ In Progress</option>
+          <option value="consolidated">✅ Consolidated</option>
+        </select>
+      </div>
+      <div class="field"><label>Content</label>
+        <div id="add-editor-container" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;min-height:150px;padding:10px;color:var(--text);"></div>
       </div>
       <div id="add-status">
         <div class="sp-sm"></div><span id="add-msg"></span>
@@ -1074,21 +1099,60 @@
         <div class="content-box" id="dp-name-view">—</div>
         <div class="edit-form hidden" id="dp-name-edit">
           <input id="dp-name-input" type="text" maxlength="255" />
-          <div class="edit-actions"><button class="btn-ce" onclick="cancelEdit('name')">Cancel</button><button
-              class="btn-se" onclick="saveEdit('name')">Save</button></div>
+          <div class="edit-actions"><button class="btn-ce" onclick="cancelEdit('name')">Cancel</button><button class="btn-se" onclick="saveEdit('name')">Save</button></div>
         </div>
       </div>
+      
+      <!-- Tags & Status -->
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <div class="sec-row">
+            <div class="sec">Tags</div><button class="edit-btn" onclick="editField('tags')" title="Edit">✎</button>
+          </div>
+          <div class="content-box" id="dp-tags-view" style="display:flex;flex-wrap:wrap;gap:5px;">—</div>
+          <div class="edit-form hidden" id="dp-tags-edit">
+            <input id="dp-tags-input" type="text" placeholder="Comma separated" />
+            <div class="edit-actions"><button class="btn-ce" onclick="cancelEdit('tags')">Cancel</button><button class="btn-se" onclick="saveEdit('tags')">Save</button></div>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <div class="sec-row">
+            <div class="sec">Status</div><button class="edit-btn" onclick="editField('status')" title="Edit">✎</button>
+          </div>
+          <div class="content-box" id="dp-status-view">—</div>
+          <div class="edit-form hidden" id="dp-status-edit">
+            <select id="dp-status-input" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-size:13px;width:100%;outline:none;">
+              <option value="draft">✏️ Draft</option>
+              <option value="in progress">⚙️ In Progress</option>
+              <option value="consolidated">✅ Consolidated</option>
+            </select>
+            <div class="edit-actions" style="margin-top:8px;"><button class="btn-ce" onclick="cancelEdit('status')">Cancel</button><button class="btn-se" onclick="saveEdit('status')">Save</button></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Content -->
       <div>
         <div class="sec-row">
           <div class="sec">Content</div><button class="edit-btn" onclick="editField('content')" title="Edit">✎</button>
         </div>
-        <div class="content-box" id="dp-content-view">—</div>
+        <div class="content-box" id="dp-content-view" style="max-height:300px;overflow-y:auto;padding:10px;">—</div>
         <div class="edit-form hidden" id="dp-content-edit">
-          <textarea id="dp-content-input"></textarea>
-          <div class="edit-actions"><button class="btn-ce" onclick="cancelEdit('content')">Cancel</button><button
-              class="btn-se" onclick="saveEdit('content')">Save</button></div>
+          <div id="detail-editor-container" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;min-height:200px;padding:10px;color:var(--text);"></div>
+          <div class="edit-actions" style="margin-top:8px;"><button class="btn-ce" onclick="cancelEdit('content')">Cancel</button><button class="btn-se" onclick="saveEdit('content')">Save</button></div>
         </div>
+      </div>
+
+      <!-- Citations -->
+      <div>
+        <div class="sec">Citations</div>
+        <div id="dp-citations" style="display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
+
+      <!-- Highlights -->
+      <div>
+        <div class="sec">Highlights</div>
+        <div id="dp-highlights" style="display:flex;flex-direction:column;gap:5px;"></div>
       </div>
       <!-- Embedding -->
       <div>
@@ -1195,6 +1259,22 @@
     <div class="cxt-item danger" id="cxt-delete-edge" style="display: none">🗑 Delete Connection</div>
   </div>
   <div id="connection-tip" class="hidden">Click a target node to connect...</div>
+
+  <script type="module">
+    import { Editor } from 'https://esm.sh/@tiptap/core@2.2.4';
+    import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.2.4';
+    import Placeholder from 'https://esm.sh/@tiptap/extension-placeholder@2.2.4';
+    import Mention from 'https://esm.sh/@tiptap/extension-mention@2.2.4';
+
+    window.TiptapEditor = Editor;
+    window.TiptapStarterKit = StarterKit;
+    window.TiptapPlaceholder = Placeholder;
+    window.TiptapMention = Mention;
+    window.tiptapLoaded = true;
+    
+    // Dispatch an event to let the main script know Tiptap is ready
+    document.dispatchEvent(new Event('tiptap-ready'));
+  </script>
 
   <script>
 
@@ -1441,13 +1521,122 @@
       setTimeout(() => root.classList.remove('theme-transition'), 400);
     });
 
+    const STATUS_ICONS = {
+      'draft': '✏️',
+      'in progress': '⚙️',
+      'consolidated': '✅'
+    };
+
+    function getTagColor(tags) {
+      if (!tags || tags.length === 0) return null;
+      const tag = tags[0]; 
+      let hash = 0;
+      for (let i = 0; i < tag.length; i++) {
+        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return `hsl(${Math.abs(hash) % 360}, 65%, 55%)`;
+    }
+
+    let addEditor, detailEditor;
+    document.addEventListener('tiptap-ready', () => {
+      const suggestion = {
+        items: ({ query }) => {
+          return graphData.elements.nodes
+            .map(n => n.data)
+            .filter(item => item.name.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 5);
+        },
+        render: () => {
+          let popup;
+          return {
+            onStart: props => {
+              if (!props.clientRect) return;
+              popup = document.createElement('div');
+              popup.style.cssText = 'position:absolute;background:var(--surface2);border:1px solid var(--border);border-radius:6px;z-index:9999;padding:4px;display:flex;flex-direction:column;max-height:150px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);min-width:150px;';
+              
+              const updateItems = (items) => {
+                popup.innerHTML = '';
+                if (!items.length) {
+                  popup.innerHTML = '<div style="padding:4px 8px;font-size:12px;color:var(--dim);">No results</div>';
+                  return;
+                }
+                items.forEach((item, index) => {
+                  const btn = document.createElement('button');
+                  btn.style.cssText = 'background:none;border:none;color:var(--text);text-align:left;padding:6px 8px;font-size:12px;border-radius:4px;cursor:pointer;';
+                  btn.onmouseover = () => btn.style.background = 'var(--accent)';
+                  btn.onmouseout = () => btn.style.background = 'none';
+                  btn.textContent = item.name;
+                  btn.onclick = () => {
+                    props.command({ id: item.id, label: item.name });
+                    if (currentNodeId) {
+                      // Auto-create edge from current node to mentioned node
+                      fetch('/edges/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_id: parseInt(currentNodeId), target_id: parseInt(item.id), name: 'mentions', description: '' }) })
+                        .then(r => r.json())
+                        .then(edgeData => {
+                           const cyEdge = { data: { id: 'e' + edgeData.id, source: String(edgeData.source_id), target: String(edgeData.target_id), name: edgeData.name, description: edgeData.description, similarity: edgeData.similarity, created_at: edgeData.created_at } };
+                           if(!cy.getElementById(cyEdge.data.id).length) { cy.add(cyEdge); graphData.elements.edges.push(cyEdge); updateStats(); }
+                        });
+                    }
+                  };
+                  popup.appendChild(btn);
+                });
+              };
+              
+              updateItems(props.items);
+              document.body.appendChild(popup);
+              const rect = props.clientRect();
+              popup.style.left = rect.left + 'px';
+              popup.style.top = rect.bottom + window.scrollY + 5 + 'px';
+              popup.updateItems = updateItems;
+            },
+            onUpdate: props => {
+              if (popup && popup.updateItems) popup.updateItems(props.items);
+              if (popup && props.clientRect) {
+                const rect = props.clientRect();
+                popup.style.left = rect.left + 'px';
+                popup.style.top = rect.bottom + window.scrollY + 5 + 'px';
+              }
+            },
+            onKeyDown: props => {
+              if (props.event.key === 'Escape') { popup?.remove(); return true; }
+              return false;
+            },
+            onExit: () => {
+              if (popup) popup.remove();
+            }
+          }
+        }
+      };
+
+      addEditor = new window.TiptapEditor({
+        element: document.getElementById('add-editor-container'),
+        extensions: [
+          window.TiptapStarterKit,
+          window.TiptapPlaceholder.configure({ placeholder: 'Notes... use @ for mentions' }),
+          window.TiptapMention.configure({ HTMLAttributes: { class: 'mention' }, suggestion })
+        ],
+        content: '',
+      });
+      
+      detailEditor = new window.TiptapEditor({
+        element: document.getElementById('detail-editor-container'),
+        extensions: [
+          window.TiptapStarterKit,
+          window.TiptapMention.configure({ HTMLAttributes: { class: 'mention' }, suggestion })
+        ],
+        content: '',
+        editable: false,
+      });
+    });
+
     function getCyStyles(light) {
       return [
         {
           selector: 'node', style: {
-            width: 'data(size)', height: 'data(size)', 'background-color': light ? '#e0e7ff' : '#1e2a4a',
+            width: 'data(size)', height: 'data(size)', 
+            'background-color': function(e){ return e.data('displayColor') || (light ? '#e0e7ff' : '#1e2a4a'); },
             'border-width': 1.5, 'border-color': light ? '#3b82f6' : '#5b8fff', 'border-opacity': .5,
-            label: 'data(label)', color: light ? '#1e3a8a' : '#c8d4f0',
+            label: 'data(displayLabel)', color: light ? '#1e3a8a' : '#c8d4f0',
             'font-family': 'Inter,sans-serif', 'font-size': '11px', 'font-weight': '500',
             'text-valign': 'bottom', 'text-halign': 'center', 'text-margin-y': 7,
             'transition-property': 'opacity,border-color,border-opacity,background-color,color',
@@ -1634,6 +1823,10 @@
           n.data.size = base;
           n.data.hl_size = base + 6;
           n.data.sel_size = base + 10;
+          
+          const icon = STATUS_ICONS[n.data.status || 'draft'];
+          n.data.displayLabel = `${icon} ${n.data.label}`;
+          n.data.displayColor = getTagColor(n.data.tags);
         });
       }
 
@@ -1863,8 +2056,11 @@
     /* ── Save node ── */
     document.getElementById('btn-save').addEventListener('click', async () => {
       const name = document.getElementById('m-name').value.trim();
-      const content = document.getElementById('m-content').value.trim();
-      if (!name || !content) { setStatus('Name and content are required.', false); return; }
+      const content = addEditor ? addEditor.getHTML() : '';
+      const tags = document.getElementById('m-tags').value.split(',').map(s => s.trim()).filter(s => s);
+      const status = document.getElementById('m-status').value;
+
+      if (!name || !content || content === '<p></p>') { setStatus('Name and content are required.', false); return; }
 
       document.getElementById('btn-save').disabled = true;
       setStatus('Computing embedding…', true);
@@ -1882,7 +2078,7 @@
 
       let node;
       try {
-        const r = await fetch('/nodes/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, content }) });
+        const r = await fetch('/nodes/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, content, tags, status }) });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         node = await r.json();
       } catch (e) {
@@ -1898,7 +2094,21 @@
       cy.remove(cy.getElementById(tempId));
 
       const realId = String(node.id);
-      const cyNode = { data: { id: realId, label: node.name, name: node.name, content: node.content, created_at: node.created_at, has_embedding: true } };
+      const icon = STATUS_ICONS[node.status || 'draft'];
+      const cyNode = { 
+        data: { 
+          id: realId, 
+          label: node.name, 
+          name: node.name, 
+          content: node.content, 
+          created_at: node.created_at, 
+          has_embedding: true,
+          tags: node.tags,
+          status: node.status,
+          displayLabel: `${icon} ${node.name}`,
+          displayColor: getTagColor(node.tags)
+        } 
+      };
       cy.add(cyNode);
       graphData.elements.nodes.push(cyNode);
       updateStats();
@@ -1928,7 +2138,9 @@
       setStatus('Waiting for edges…', false);
       document.getElementById('btn-save').disabled = false;
       document.getElementById('m-name').value = '';
-      document.getElementById('m-content').value = '';
+      document.getElementById('m-tags').value = '';
+      document.getElementById('m-status').value = 'draft';
+      if (addEditor) addEditor.commands.setContent('');
     });
 
     /* ── Smooth layout transition ──
@@ -2033,7 +2245,7 @@
     /* ── Detail panel ── */
     let currentNodeId = null;
 
-    function showDetail(data) {
+    async function showDetail(data) {
       currentNodeId = String(data.id);
       document.getElementById('dp-title').textContent = data.name;
 
@@ -2041,11 +2253,51 @@
       document.getElementById('dp-name-view').textContent = data.name;
       document.getElementById('dp-name-input').value = data.name;
       cancelEdit('name');
+      
+      // Tags
+      const tagsView = document.getElementById('dp-tags-view');
+      const tags = data.tags || [];
+      if (tags.length === 0) {
+        tagsView.textContent = '—';
+      } else {
+        tagsView.innerHTML = tags.map(t => `<span style="background:var(--surface);border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-size:11px;">${t}</span>`).join('');
+      }
+      document.getElementById('dp-tags-input').value = tags.join(', ');
+      cancelEdit('tags');
+      
+      // Status
+      const st = data.status || 'draft';
+      document.getElementById('dp-status-view').textContent = `${STATUS_ICONS[st]} ${st.charAt(0).toUpperCase() + st.slice(1)}`;
+      document.getElementById('dp-status-input').value = st;
+      cancelEdit('status');
 
-      // Content
-      document.getElementById('dp-content-view').textContent = data.content || '—';
-      document.getElementById('dp-content-input').value = data.content || '';
+      // Content (Tiptap)
+      if (detailEditor) {
+        detailEditor.setEditable(false);
+        detailEditor.commands.setContent(data.content || '');
+      }
       cancelEdit('content');
+      
+      // Fetch Citations and Highlights
+      try {
+        const [citRes, hlRes] = await Promise.all([
+          fetch(`/nodes/${currentNodeId}/citations`),
+          fetch(`/nodes/${currentNodeId}/highlights`, { method: 'GET' }).catch(() => ({ ok: false })) // Fallback if no highlights GET route
+        ]);
+        
+        const citations = citRes.ok ? await citRes.json() : (data.citations || []);
+        const highlights = (hlRes && hlRes.ok) ? await hlRes.json() : (data.highlights || []);
+        
+        const citEl = document.getElementById('dp-citations');
+        if (!citations || !citations.length) citEl.innerHTML = '<span style="font-size:12px;color:var(--dim)">No citations</span>';
+        else citEl.innerHTML = citations.map(c => `<div style="font-size:11px;background:var(--surface);padding:4px;border-radius:4px;"><a href="${c.url||'#'}" target="_blank" style="color:var(--accent)">${c.title||c.url}</a></div>`).join('');
+        
+        const hlEl = document.getElementById('dp-highlights');
+        if (!highlights || !highlights.length) hlEl.innerHTML = '<span style="font-size:12px;color:var(--dim)">No highlights</span>';
+        else hlEl.innerHTML = highlights.map(h => `<div style="font-size:11px;background:var(--surface);padding:4px;border-radius:4px;border-left:2px solid var(--accent2)">"${h.text}"<br><span style="color:var(--dim)">${h.comment||''}</span></div>`).join('');
+      } catch (e) {
+        console.error("Failed to load metadata", e);
+      }
 
       // Embedding
       document.getElementById('dp-emb').innerHTML = data.has_embedding
@@ -2074,6 +2326,13 @@
     }
 
     function editField(field) {
+      if (field === 'content' && detailEditor) {
+        detailEditor.setEditable(true);
+        document.getElementById(`dp-content-view`).style.display = 'none';
+        document.getElementById(`dp-content-edit`).classList.remove('hidden');
+        detailEditor.commands.focus();
+        return;
+      }
       document.getElementById(`dp-${field}-view`).style.display = 'none';
       document.getElementById(`dp-${field}-edit`).classList.remove('hidden');
       document.getElementById(`dp-${field}-input`).focus();
@@ -2089,14 +2348,24 @@
     }
 
     function cancelEdit(field) {
+      if (field === 'content' && detailEditor) detailEditor.setEditable(false);
       document.getElementById(`dp-${field}-view`).style.display = '';
       document.getElementById(`dp-${field}-edit`).classList.add('hidden');
     }
 
     async function saveEdit(field) {
-      const input = document.getElementById(`dp-${field}-input`);
-      const value = input.value.trim();
-      if (!value || !currentNodeId) return;
+      let value;
+      if (field === 'content') {
+        value = detailEditor ? detailEditor.getHTML() : '';
+      } else if (field === 'tags') {
+        value = document.getElementById(`dp-tags-input`).value.split(',').map(s => s.trim()).filter(s => s);
+      } else {
+        const input = document.getElementById(`dp-${field}-input`);
+        value = input.value.trim();
+      }
+      
+      if ((!value || (Array.isArray(value) && value.length === 0)) && field !== 'tags') return;
+      if (!currentNodeId) return;
       try {
         const r = await fetch(`/nodes/${currentNodeId}`, {
           method: 'PATCH',
@@ -2105,13 +2374,34 @@
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const updated = await r.json();
+        
         // Update local data + Cytoscape
         const nd = graphData.elements.nodes.find(n => n.data.id === currentNodeId);
-        if (nd) { nd.data[field] = value; if (field === 'name') nd.data.label = value; }
         const cn = cy.getElementById(currentNodeId);
-        cn.data(field, value);
-        if (field === 'name') { cn.data('label', value); document.getElementById('dp-title').textContent = value; }
-        document.getElementById(`dp-${field}-view`).textContent = value;
+        
+        if (nd) nd.data[field] = value; 
+        if (cn.length) cn.data(field, value);
+        
+        if (field === 'name') { 
+          if (nd) nd.data.label = value; 
+          if (cn.length) cn.data('label', value); 
+          document.getElementById('dp-title').textContent = value;
+          document.getElementById('dp-name-view').textContent = value;
+        } else if (field === 'status' || field === 'tags') {
+          const icon = STATUS_ICONS[updated.status || 'draft'];
+          const displayLabel = `${icon} ${updated.name}`;
+          const displayColor = getTagColor(updated.tags);
+          if (nd) { nd.data.displayLabel = displayLabel; nd.data.displayColor = displayColor; }
+          if (cn.length) { cn.data('displayLabel', displayLabel); cn.data('displayColor', displayColor); }
+          
+          if (field === 'tags') {
+            const tv = document.getElementById('dp-tags-view');
+            tv.innerHTML = updated.tags.length ? updated.tags.map(t => `<span style="background:var(--surface);border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-size:11px;">${t}</span>`).join('') : '—';
+          } else if (field === 'status') {
+            document.getElementById('dp-status-view').textContent = `${icon} ${updated.status.charAt(0).toUpperCase() + updated.status.slice(1)}`;
+          }
+        }
+        
         cancelEdit(field);
       } catch (e) { alert('Update failed: ' + e.message); }
     }

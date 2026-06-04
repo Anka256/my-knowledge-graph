@@ -49,7 +49,7 @@ async def create_node(
         embedding=embedding, 
         user_id=current_user.id,
         tags=payload.tags if payload.tags is not None else [],
-        status=payload.status if payload.status is not None else "seedling"
+        status=payload.status if payload.status is not None else "draft"
     )
     db.add(node)
     try:
