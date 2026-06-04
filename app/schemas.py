@@ -1,21 +1,38 @@
 from datetime import datetime
-from typing import Optional
+from enum import Enum
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
+class NodeStatus(str, Enum):
+    seedling = "seedling"
+    growing = "growing"
+    mature = "mature"
 
 class NodeCreate(BaseModel):
     """Request body for POST /nodes/."""
 
     name: str = Field(..., min_length=1, max_length=255, examples=["Artificial Intelligence"])
     content: str = Field(..., min_length=1, examples=["Notes on artificial intelligence..."])
-
+    tags: Optional[List[str]] = Field(default_factory=list)
+    status: Optional[NodeStatus] = Field(default=NodeStatus.seedling)
 
 class NodeUpdate(BaseModel):
     """Request body for PATCH /nodes/{id}. All fields are optional."""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = Field(None, min_length=1)
+    tags: Optional[List[str]] = None
+    status: Optional[NodeStatus] = None
+    citations: Optional[List[Dict[str, Any]]] = None
 
+class HighlightCreate(BaseModel):
+    text: str
+    comment: Optional[str] = None
+    
+class CitationCreate(BaseModel):
+    url: Optional[str] = None
+    title: Optional[str] = None
+    type: str = "url"
 
 class NodeResponse(BaseModel):
     """Response after successful node creation or update."""
@@ -24,6 +41,10 @@ class NodeResponse(BaseModel):
     name: str
     content: str
     created_at: datetime
+    tags: List[str]
+    status: NodeStatus
+    highlights: List[Dict[str, Any]]
+    citations: List[Dict[str, Any]]
 
     model_config = {"from_attributes": True}
 

@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         # Tabloları oluştur
         await conn.run_sync(Base.metadata.create_all)
-        # Mevcut nodes tablosuna embedding kolonunu ekle (migration)
+        # Mevcut nodes tablosuna yeni kolonları ekle (migration)
         await conn.execute(text(
             "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS embedding vector(1536);"
         ))
@@ -32,6 +32,18 @@ async def lifespan(app: FastAPI):
         ))
         await conn.execute(text(
             "ALTER TABLE edges ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS tags VARCHAR[] DEFAULT '{}';"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'seedling';"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS highlights JSONB DEFAULT '[]'::jsonb;"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS citations JSONB DEFAULT '[]'::jsonb;"
         ))
         
         # Create a default user if none exist, so we can assign existing data to it

@@ -1,11 +1,14 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+import uuid
+import os
+import aiofiles
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
 from app.database import get_db
 from app.models import Node, User
-from app.schemas import NodeCreate, NodeUpdate, NodeResponse, SimilarNodeResponse
+from app.schemas import NodeCreate, NodeUpdate, NodeResponse, SimilarNodeResponse, HighlightCreate
 from app.services.embedding import get_embedding
 from app.services.graph import create_auto_edges_for_node
 from app.ws.manager import manager
@@ -40,7 +43,14 @@ async def create_node(
         logger.warning("Embedding failed, saving without it: %s", exc)
         embedding = None
 
-    node = Node(name=payload.name, content=payload.content, embedding=embedding, user_id=current_user.id)
+    node = Node(
+        name=payload.name, 
+        content=payload.content, 
+        embedding=embedding, 
+        user_id=current_user.id,
+        tags=payload.tags if payload.tags is not None else [],
+        status=payload.status if payload.status is not None else "seedling"
+    )
     db.add(node)
     try:
         await db.commit()
@@ -87,6 +97,15 @@ async def update_node(
 
     if payload.name is not None:
         node.name = payload.name
+    
+    if payload.tags is not None:
+        node.tags = payload.tags
+        
+    if payload.status is not None:
+        node.status = payload.status
+        
+    if payload.citations is not None:
+        node.citations = payload.citations
 
     content_changed = payload.content is not None and payload.content != node.content
     if payload.content is not None:
@@ -185,3 +204,83 @@ async def get_similar_nodes(
     records = rows.mappings().all()
 
     return [SimilarNodeResponse(**row) for row in records]
+
+@router.post(
+    "/{node_id}/highlights",
+    response_model=NodeResponse,
+    summary="Add a highlight",
+    description="Adds a highlight and an optional comment to the node's highlights list.",
+)
+async def add_highlight(
+    node_id: int,
+    payload: HighlightCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> NodeResponse:
+    result = await db.execute(select(Node).where(Node.id == node_id, Node.user_id == current_user.id))
+    node = result.scalar_one_or_none()
+    if node is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found.")
+
+    new_highlight = payload.model_dump()
+    
+    # We create a new list so SQLAlchemy detects the change to the JSONB column
+    current_highlights = list(node.highlights) if node.highlights else []
+    current_highlights.append(new_highlight)
+    node.highlights = current_highlights
+
+    try:
+        await db.commit()
+        await db.refresh(node)
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {exc}",
+        )
+
+    return node
+
+@router.get(
+    "/{node_id}/citations",
+    summary="Get node citations",
+    description="Returns the list of citations associated with the node.",
+)
+async def get_citations(
+    node_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Node.citations).where(Node.id == node_id, Node.user_id == current_user.id))
+    citations = result.scalar_one_or_none()
+    if citations is None:
+        # Check if node exists
+        result_node = await db.execute(select(Node.id).where(Node.id == node_id, Node.user_id == current_user.id))
+        if result_node.scalar_one_or_none() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found.")
+        return []
+    
+    return citations
+
+UPLOAD_DIR = "static/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post(
+    "/upload",
+    summary="Upload a media file",
+    description="Upload an image, audio, or video file to embed in the rich text editor. Returns the URL of the uploaded file.",
+)
+async def upload_media(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    # Determine extension and validate basic types if necessary
+    ext = os.path.splitext(file.filename)[1] if file.filename else ""
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, unique_name)
+    
+    async with aiofiles.open(file_path, 'wb') as out_file:
+        content = await file.read()
+        await out_file.write(content)
+        
+    return {"url": f"/static/uploads/{unique_name}", "filename": file.filename}

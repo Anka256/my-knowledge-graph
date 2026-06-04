@@ -7,6 +7,14 @@ from app.database import Base
 from app.database import Base
 
 
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+import enum
+
+class NodeStatus(str, enum.Enum):
+    seedling = "seedling"
+    growing = "growing"
+    mature = "mature"
+
 class User(Base):
     __tablename__ = "users"
     
@@ -17,6 +25,7 @@ class User(Base):
     
     nodes: Mapped[list["Node"]] = relationship("Node", back_populates="owner", cascade="all, delete-orphan")
     edges: Mapped[list["Edge"]] = relationship("Edge", back_populates="owner", cascade="all, delete-orphan")
+
 class Node(Base):
     """Bilgi grafiğindeki bir düğümü temsil eder."""
 
@@ -32,6 +41,10 @@ class Node(Base):
     embedding: Mapped[list[float] | None] = mapped_column(
         Vector(1536), nullable=True
     )
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), server_default='{}')
+    status: Mapped[NodeStatus] = mapped_column(String(50), server_default="seedling")
+    highlights: Mapped[list[dict]] = mapped_column(JSONB, server_default='[]')
+    citations: Mapped[list[dict]] = mapped_column(JSONB, server_default='[]')
 
     # İlişkiler (edge'ler)
     owner: Mapped["User"] = relationship("User", back_populates="nodes")
