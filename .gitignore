@@ -11,3 +11,4 @@ test_*.py
 check_*.py
 *.egg-info/
 .pytest_cache/
+static/uploads/

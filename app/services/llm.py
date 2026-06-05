@@ -23,13 +23,13 @@ async def generate_edge_metadata(
     Returns {"name": "...", "description": "..."}.
     """
     prompt = (
-        "You are a knowledge graph assistant. "
-        "Given two knowledge nodes, describe the semantic relationship between them. "
-        "Respond ONLY with a JSON object, nothing else.\n\n"
-        f"Node A — {source_name}:\n{source_content}\n\n"
-        f"Node B — {target_name}:\n{target_content}\n\n"
-        'Format: {"name": "short relationship label (max 8 words)", '
-        '"description": "one or two sentences explaining the relationship"}'
+        "You are an expert knowledge extraction system. "
+        "Your task is to analyze the following two entities and identify the core semantic relationship connecting their underlying concepts. "
+        "Provide a concise, descriptive label for the connection and a brief explanation of how they conceptually relate.\n\n"
+        f"Source Entity: '{source_name}'\nContent: {source_content}\n\n"
+        f"Target Entity: '{target_name}'\nContent: {target_content}\n\n"
+        'Respond strictly in JSON format matching the following schema: '
+        '{"name": "<Short conceptual label>", "description": "<Brief conceptual explanation>"}'
     )
 
     response = await _client.chat.completions.create(

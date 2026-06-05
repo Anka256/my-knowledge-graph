@@ -4,7 +4,7 @@ import os
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select, text, delete
 
 from app.database import get_db
 from app.models import Node, User
@@ -134,6 +134,20 @@ async def update_node(
         background_tasks.add_task(create_auto_edges_for_node, node.id, current_user.id)
 
     return node
+
+
+@router.delete(
+    "/all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete all nodes",
+    description="Permanently deletes all nodes and their connections for the current user.",
+)
+async def delete_all_nodes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await db.execute(delete(Node).where(Node.user_id == current_user.id))
+    await db.commit()
 
 
 @router.delete(

@@ -82,6 +82,7 @@ class EdgeCreate(BaseModel):
     target_id: int
     name: str = Field(..., min_length=1, max_length=255)
     description: str
+    similarity: float = 1.0
 
 
 class EdgeUpdate(BaseModel):

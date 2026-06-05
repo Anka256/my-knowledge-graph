@@ -7,8 +7,40 @@ from app.database import get_db
 from app.models import Edge, Node, User
 from app.schemas import EdgeResponse, EdgeCreate, EdgeUpdate
 from app.auth import get_current_user
+from app.services.llm import generate_edge_metadata
 
 router = APIRouter(prefix="/edges", tags=["edges"])
+
+
+@router.get(
+    "/generate-metadata",
+    summary="Generate edge metadata via LLM",
+)
+async def generate_metadata_endpoint(
+    source_id: int,
+    target_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Node).where(Node.id.in_([source_id, target_id]), Node.user_id == current_user.id))
+    nodes = result.scalars().all()
+    if len(nodes) != 2:
+        raise HTTPException(status_code=404, detail="Nodes not found")
+    
+    n1, n2 = nodes
+    source = n1 if n1.id == source_id else n2
+    target = n2 if n2.id == target_id else n1
+
+    try:
+        metadata = await generate_edge_metadata(
+            source_name=source.name,
+            source_content=source.content or "",
+            target_name=target.name,
+            target_content=target.content or "",
+        )
+        return metadata
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get(
@@ -74,6 +106,10 @@ async def get_graph(db: AsyncSession = Depends(get_db), current_user: User = Dep
                 "label": n.name,
                 "name": n.name,
                 "content": n.content,
+                "tags": n.tags,
+                "status": n.status,
+                "citations": n.citations,
+                "highlights": n.highlights,
                 "created_at": n.created_at.isoformat(),
                 "has_embedding": n.embedding is not None,
             }

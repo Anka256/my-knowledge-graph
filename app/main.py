@@ -39,6 +39,9 @@ async def lifespan(app: FastAPI):
         await conn.execute(text(
             "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft';"
         ))
+        await conn.execute(text("UPDATE nodes SET status = 'draft' WHERE status = 'seedling';"))
+        await conn.execute(text("UPDATE nodes SET status = 'in progress' WHERE status = 'growing';"))
+        await conn.execute(text("UPDATE nodes SET status = 'consolidated' WHERE status = 'mature';"))
         await conn.execute(text(
             "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS highlights JSONB DEFAULT '[]'::jsonb;"
         ))
